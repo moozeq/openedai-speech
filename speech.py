@@ -14,6 +14,8 @@ import json
 
 from fastapi.responses import StreamingResponse
 from loguru import logger
+from starlette.background import BackgroundTask
+
 from openedai import OpenAIStub, BadRequestError, ServiceUnavailableError
 from pydantic import BaseModel
 import uvicorn
@@ -26,7 +28,6 @@ async def lifespan(app):
         import torch
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
-            torch.cuda.ipc_collect()
     except:
         pass
 
@@ -39,7 +40,7 @@ def unload_model():
     global xtts
     if xtts:
         logger.info("Unloading model")
-        xtts.xtts.to('cpu') # this was required to free up GPU memory... 
+        xtts.xtts.to('cpu') # this was required to free up GPU memory...
         del xtts
         xtts = None
         gc.collect()
@@ -115,7 +116,7 @@ def default_exists(filename: str):
         fpath, ext = os.path.splitext(filename)
         basename = os.path.basename(fpath)
         default = f"{basename}.default{ext}"
-        
+
         logger.info(f"{filename} does not exist, setting defaults from {default}")
 
         with open(default, 'r', encoding='utf8') as from_file:
@@ -130,7 +131,7 @@ def preprocess(raw_input):
         pre_process_map = yaml.safe_load(file)
         for a, b in pre_process_map:
             raw_input = re.sub(a, b, raw_input)
-    
+
     raw_input = raw_input.strip()
     #logger.debug(f"preprocess: after: {[raw_input]}")
     return raw_input
@@ -159,7 +160,7 @@ def build_ffmpeg_args(response_format, input_format, sample_rate):
         ffmpeg_args = ["ffmpeg", "-loglevel", "error", "-f", "WAV", "-i", "-"]
     else:
         ffmpeg_args = ["ffmpeg", "-loglevel", "error", "-f", input_format, "-ar", sample_rate, "-ac", "1", "-i", "-"]
-    
+
     if response_format == "mp3":
         ffmpeg_args.extend(["-f", "mp3", "-c:a", "libmp3lame", "-ab", "64k"])
     elif response_format == "opus":
@@ -240,7 +241,7 @@ async def generate_speech(request: GenerateSpeechRequest):
 
         except:
             sample_rate = '22050'
-  
+
         ffmpeg_args = build_ffmpeg_args(response_format, input_format="s16le", sample_rate=sample_rate)
 
         # Pipe the output from piper/xtts to the input of ffmpeg
@@ -272,9 +273,9 @@ async def generate_speech(request: GenerateSpeechRequest):
         speed = voice_map.pop('speed', speed)
         if speed < 0.5:
             speed = speed / 0.5
-            ffmpeg_args.extend(["-af", "atempo=0.5"]) 
+            ffmpeg_args.extend(["-af", "atempo=0.5"])
         if speed > 1.0:
-            ffmpeg_args.extend(["-af", f"atempo={speed}"]) 
+            ffmpeg_args.extend(["-af", f"atempo={speed}"])
             speed = 1.0
 
         # Pipe the output from piper/xtts to the input of ffmpeg
@@ -316,7 +317,7 @@ async def generate_speech(request: GenerateSpeechRequest):
 
         ffmpeg_proc = subprocess.Popen(ffmpeg_args, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
 
-        in_q = queue.Queue() # speech pcm 
+        in_q = queue.Queue() # speech pcm
         ex_q = queue.Queue() # exceptions
 
         def get_speaker_samples(samples: str) -> list[str]:
@@ -331,7 +332,7 @@ async def generate_speech(request: GenerateSpeechRequest):
             else:
                 logger.error(f"Invalid path: {samples}")
                 raise ServiceUnavailableError(f"Invalid path: {samples}")
-            
+
             return audio_path
 
         def exception_check(exq: queue.Queue):
@@ -339,7 +340,7 @@ async def generate_speech(request: GenerateSpeechRequest):
                 e = exq.get_nowait()
             except queue.Empty:
                 return
-            
+
             raise e
 
         def generator():
@@ -360,11 +361,11 @@ async def generate_speech(request: GenerateSpeechRequest):
             except Exception as e:
                 logger.error(f"Exception: {repr(e)}")
                 raise e
-        
+
             finally:
                 in_q.put(None) # sentinel
 
-        def out_writer(): 
+        def out_writer():
             # in_q -> ffmpeg
             try:
                 while True:
@@ -377,7 +378,7 @@ async def generate_speech(request: GenerateSpeechRequest):
                 ex_q.put(e)  # we need to get this exception into the generation loop
                 ffmpeg_proc.kill()
                 return
-            
+
             finally:
                 ffmpeg_proc.stdin.close()
 
@@ -387,12 +388,18 @@ async def generate_speech(request: GenerateSpeechRequest):
         out_writer_worker = threading.Thread(target=out_writer, daemon=True)
         out_writer_worker.start()
 
-        def cleanup():
+        def cleanup(generator_worker_to_clean, out_writer_worker_to_clean):
             ffmpeg_proc.kill()
-            del generator_worker
-            del out_writer_worker
 
-        return StreamingResponse(content=ffmpeg_proc.stdout, media_type=media_type, background=cleanup)
+            generator_worker_to_clean.join()
+            out_writer_worker_to_clean.join()
+
+            del generator_worker_to_clean
+            del out_writer_worker_to_clean
+
+        cleanup_task = BackgroundTask(cleanup, generator_worker, out_writer_worker)
+
+        return StreamingResponse(content=ffmpeg_proc.stdout, media_type=media_type, background=cleanup_task)
     else:
         raise BadRequestError("No such model, must be tts-1 or tts-1-hd.", param='model')
 
@@ -402,7 +409,7 @@ def auto_torch_device():
     try:
         import torch
         return 'cuda' if torch.cuda.is_available() else 'mps' if ( torch.backends.mps.is_available() and torch.backends.mps.is_built() ) else 'cpu'
-    
+
     except:
         return 'none'
 

@@ -1,0 +1,69 @@
+tts-1:
+  alloy:
+    model: voices/en_US-libritts_r-medium.onnx
+    speaker: 79
+  echo:
+    model: voices/en_US-libritts_r-medium.onnx
+    speaker: 134
+  echo-alt:
+    model: voices/en_US-ryan-high.onnx
+    speaker: null
+  fable:
+    model: voices/en_GB-northern_english_male-medium.onnx
+    speaker: null
+  nova:
+    model: voices/en_US-libritts_r-medium.onnx
+    speaker: 107
+  onyx:
+    model: voices/en_US-libritts_r-medium.onnx
+    speaker: 159
+  shimmer:
+    model: voices/en_US-libritts_r-medium.onnx
+    speaker: 163
+tts-1-hd:
+  alloy:
+    model: halo
+    model_path: voices/halo
+    speaker: voices/alloy.wav
+  alloy-alt:
+    model: xtts
+    speaker: voices/alloy-alt.wav
+  dream:
+    model: xtts
+    speaker: voices/dream.wav
+  halo:
+    model: halo
+    speaker: voices/halo/dream.wav
+    enable_text_splitting: true
+    model_path: voices/halo
+  drbook:
+    model: xtts
+    speaker: voices/drbook.wav
+  echo:
+    model: xtts
+    speaker: voices/echo.wav
+  fable:
+    model: xtts
+    speaker: voices/fable.wav
+  me:
+    comment: You can add a comment here also, which will be persistent and otherwise
+      ignored.
+    enable_text_splitting: true
+    language: auto
+    length_penalty: 1.0
+    model: xtts
+    repetition_penalty: 10
+    speaker: voices/me.wav
+    speed: 1.0
+    temperature: 0.75
+    top_k: 50
+    top_p: 0.85
+  nova:
+    model: xtts
+    speaker: voices/nova.wav
+  onyx:
+    model: xtts
+    speaker: voices/onyx.wav
+  shimmer:
+    model: xtts
+    speaker: voices/shimmer.wav
