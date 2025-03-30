@@ -3,7 +3,11 @@ services:
     build:
       dockerfile: Dockerfile
     image: github.com/moozeq/openedai-speech
-    env_file: speech.env
+    environment:
+      - TTS_HOME=voices
+      - HF_HOME=voices
+      - PRELOAD_MODEL=halo
+      - COQUI_TOS_AGREED=1
     ports:
       - "8000:8000"
     volumes:
