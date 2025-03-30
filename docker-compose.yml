@@ -9,7 +9,7 @@ services:
       - PRELOAD_MODEL=halo
       - COQUI_TOS_AGREED=1
     ports:
-      - "8000:8000"
+      - "8880:8880"
     volumes:
       - ./voices:/app/voices
       - ./config:/app/config
